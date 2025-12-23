@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Master Scrap Log - Matsu Barrie</title>
+  <title>Master Scrap Log</title>
   <style>
     :root { --primary: #1a3a5a; --accent: #0078d4; }
     body { font-family: "Segoe UI", sans-serif; background: #d1d1d1; padding: 10px; }
@@ -34,7 +34,7 @@
     .col-dt { width: 150px; }
     .col-init { width: 50px; }
     .col-full { width: 65px; }
-    .col-note { width: auto; } /* Flexible column for issues */
+    .col-note { width: auto; }
 
     .chk-col { text-align: center; vertical-align: middle; }
     .chk-col input[type="checkbox"] { width: 18px; height: 18px; margin: auto; cursor: pointer; }
@@ -156,31 +156,13 @@ function manualSave() {
     };
     document.querySelectorAll("#tableBody tr").forEach(row => {
         const inputs = Array.from(row.querySelectorAll('input, select'));
-        const rowVals = inputs.map(i => i.value);
-        if (rowVals.some(v => v !== "" && v !== "--" && v !== "on")) { // "on" check for checkbox
+        const rowVals = inputs.map(i => (i.type === 'checkbox') ? (i.checked ? "on" : "off") : i.value);
+        if (rowVals.some((v, idx) => idx !== 0 && v !== "" && v !== "--")) {
             data.rows.push(rowVals);
         }
     });
-    const stringData = JSON.stringify(data);
-    const sizeMB = (stringData.length * 2) / 1024 / 1024;
-    document.getElementById('mem-status').innerText = `Memory Load: ${Math.min((sizeMB / MAX_STORAGE_MB) * 100, 100).toFixed(1)}%`;
-    if (sizeMB > MAX_STORAGE_MB) {
-        alert("⚠️ MEMORY LIMIT REACHED: Downloading backup and resetting browser memory.");
-        triggerAutoDownload(stringData);
-        localStorage.removeItem('matsu_scrap_backup');
-        window.location.reload();
-        return;
-    }
-    localStorage.setItem('matsu_scrap_backup', stringData);
+    localStorage.setItem('matsu_scrap_backup', JSON.stringify(data));
     showToast("💾 Progress Saved");
-}
-
-function triggerAutoDownload(content) {
-    const blob = new Blob([content], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `SAFETY_BACKUP_ScrapLog_${new Date().getTime()}.json`;
-    a.click();
 }
 
 function loadSavedData() {
@@ -202,7 +184,6 @@ function loadSavedData() {
         });
     });
     addNewRow();
-    showToast("📂 Session Recovered");
 }
 
 function clearAllData() {
@@ -234,16 +215,13 @@ function transferData() {
     reportText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
     const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
-    const selectedRows = allRows.filter(row => row.querySelector('.row-selector').checked);
-    
+    const selectedRows = allRows.filter(row => row.querySelector('.row-selector')?.checked);
     const rowsToProcess = selectedRows.length > 0 ? selectedRows : allRows.filter(row => row.style.display !== "none");
 
     let entries = 0;
     rowsToProcess.forEach(row => {
-        // Skip the checkbox input when gathering data for the email
         const dataInputs = Array.from(row.querySelectorAll('input.data-input, select.data-input, input.auto-dt'));
         const vals = dataInputs.map(i => i.value);
-        
         if (vals[0] || vals[1]) {
             entries++;
             reportText += `[ENTRY #${entries}]\n`;
@@ -257,11 +235,12 @@ function transferData() {
         }
     });
 
-    if (entries === 0) return alert("No data found or no rows selected!");
+    if (entries === 0) return alert("No data found!");
 
     navigator.clipboard.writeText(reportText).then(() => {
         showToast("✅ Formatted Report Copied!");
-        window.location.href = `mailto:dmsmith@matcor-matsu.com?subject=Scrap Log - ${line}&body=${encodeURIComponent(reportText)}`;
+        // Email field is now blank
+        window.location.href = `mailto:?subject=Scrap Log - ${line}&body=${encodeURIComponent(reportText)}`;
     });
 }
 </script>
