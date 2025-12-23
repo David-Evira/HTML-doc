@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Master Scrap Log - Matsu Barrie</title>
+  <style>
+    :root { --primary: #1a3a5a; --accent: #0078d4; }
+    body { font-family: "Segoe UI", sans-serif; background: #d1d1d1; padding: 10px; }
+    .form-container { width: 98%; margin: auto; background: #fff; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: relative; }
+    .header { border-bottom: 3px solid var(--primary); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .top-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+    .input-group { border-bottom: 1px solid #ccc; padding: 5px; }
+    .input-group label { font-size: 10px; font-weight: bold; display: block; color: var(--primary); }
+    .input-group input { border: none; width: 100%; outline: none; font-size: 14px; font-weight: bold; }
+    
+    .filter-bar { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; border-radius: 4px; }
+    .filter-bar label { font-size: 12px; font-weight: bold; color: var(--primary); }
+    .filter-bar input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }
+    th { background: var(--primary); color: white; font-size: 9px; padding: 8px 2px; text-transform: uppercase; overflow: hidden; }
+    td { border: 1px solid #ccc; overflow: hidden; }
+    td input, td select { width: 100%; height: 35px; border: none; text-align: center; font-size: 12px; outline: none; display: block; box-sizing: border-box; }
+    
+    /* STABILIZED COLUMN WIDTHS */
+    .col-chk { width: 40px; }
+    .col-tag { width: 85px; }
+    .col-bin { width: 70px; }
+    .col-tkt { width: 85px; }
+    .col-wgt { width: 70px; }
+    .col-stat { width: 80px; }
+    .col-next { width: 80px; }
+    .col-pos { width: 80px; }
+    .col-dt { width: 150px; }
+    .col-init { width: 50px; }
+    .col-full { width: 65px; }
+    .col-note { width: auto; } /* Flexible column for issues */
+
+    .chk-col { text-align: center; vertical-align: middle; }
+    .chk-col input[type="checkbox"] { width: 18px; height: 18px; margin: auto; cursor: pointer; }
+    
+    .auto-dt { background-color: #f0f7ff; cursor: pointer; font-weight: bold; color: #005a9e; }
+    .btn-container { display: flex; justify-content: flex-end; gap: 10px; align-items: center; }
+    .btn { padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+    .btn-copy { background: var(--accent); color: white; }
+    .btn-save { background: #28a745; color: white; }
+    #mem-status { font-size: 10px; color: #888; margin-right: auto; }
+    #toast { visibility: hidden; min-width: 300px; background: #333; color: #fff; text-align: center; border-radius: 8px; padding: 15px; position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 100; }
+    #toast.show { visibility: visible; }
+  </style>
+</head>
+<body onload="loadSavedData()">
+
+<div class="form-container">
+  <div class="header">
+    <h1 style="color:var(--primary); margin:0; font-size: 20px;">MASTER SCRAP TRACKING LOG</h1>
+    <div style="text-align:right; font-size: 11px;">MATSU MANUFACTURING (BARRIE)</div>
+  </div>
+
+  <div class="top-inputs">
+    <div class="input-group"><label>DEPARTMENT</label><input type="text" id="dept" value="Stamping"></div>
+    <div class="input-group"><label>SHIFT</label><input type="text" id="shift" placeholder="Shift"></div>
+    <div class="input-group"><label>LINE / MACHINE</label><input type="text" id="line" placeholder="Press #"></div>
+  </div>
+
+  <div class="filter-bar">
+    <label>🔍 FILTER BY DATE:</label>
+    <input type="text" id="dateFilter" placeholder="e.g. 12/22/2025" oninput="filterTable()">
+    <span style="font-size: 10px; color: #666;">(Showing all rows if none selected)</span>
+  </div>
+
+  <table id="logTable">
+    <thead>
+      <tr>
+        <th class="col-chk">Select</th>
+        <th class="col-tag">Tag #</th>
+        <th class="col-bin">Bin #</th>
+        <th class="col-tkt">Scale Tkt #</th>
+        <th class="col-wgt">Weight</th>
+        <th class="col-stat">Status</th>
+        <th class="col-next">Next Bin</th>
+        <th class="col-pos">Position</th>
+        <th class="col-dt">Date/Time (Click)</th>
+        <th class="col-init">Init</th>
+        <th class="col-full"># Full</th>
+        <th class="col-note">Issue / Comments</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <div class="btn-container">
+    <div id="mem-status">Memory Load: 0%</div>
+    <button class="btn" style="background:#e0e0e0" onclick="clearAllData()">Reset Form</button>
+    <button class="btn btn-save" onclick="manualSave()">Save Progress</button>
+    <button class="btn btn-copy" onclick="transferData()">Compile & Send Email</button>
+  </div>
+  <div id="toast">✅ Action Successful</div>
+</div>
+
+<script>
+const tbody = document.getElementById('tableBody');
+const MAX_STORAGE_MB = 4.0;
+
+function addNewRow() {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+        <td class="chk-col"><input type="checkbox" class="row-selector"></td>
+        <td><input type="text" class="data-input" placeholder="Tag #"></td>
+        <td><input type="text" class="data-input" placeholder="Bin #"></td>
+        <td><input type="text" class="data-input" placeholder="Ticket #"></td>
+        <td><input type="text" class="data-input" placeholder="Lbs"></td>
+        <td><select class="data-input"><option value="">--</option><option value="Full">Full</option><option value="Partial">Partial</option></select></td>
+        <td><input type="text" class="data-input"></td>
+        <td><input type="text" class="data-input"></td>
+        <td><input type="text" class="auto-dt" readonly placeholder="Timestamp" onclick="captureTime(this)"></td>
+        <td><input type="text" class="data-input"></td>
+        <td><input type="text" class="data-input"></td>
+        <td><input type="text" class="data-input" placeholder="Notes/Issues"></td>
+    `;
+    tbody.appendChild(tr);
+    tr.addEventListener('input', function() {
+        if (this === tbody.lastElementChild) addNewRow();
+    }, { once: true });
+}
+
+function filterTable() {
+    const filterValue = document.getElementById('dateFilter').value.toLowerCase();
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach(row => {
+        const dateField = row.querySelector('.auto-dt');
+        if (dateField) {
+            const dateValue = dateField.value.toLowerCase();
+            row.style.display = (dateValue.includes(filterValue) || filterValue === "") ? "" : "none";
+        }
+    });
+}
+
+function captureTime(field) {
+    if (!field.value) {
+        const now = new Date();
+        field.value = now.toLocaleDateString() + " " + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        manualSave();
+    }
+}
+
+function manualSave() {
+    const data = {
+        saveTime: new Date().getTime(),
+        header: {
+            dept: document.getElementById('dept').value,
+            shift: document.getElementById('shift').value,
+            line: document.getElementById('line').value
+        },
+        rows: []
+    };
+    document.querySelectorAll("#tableBody tr").forEach(row => {
+        const inputs = Array.from(row.querySelectorAll('input, select'));
+        const rowVals = inputs.map(i => i.value);
+        if (rowVals.some(v => v !== "" && v !== "--" && v !== "on")) { // "on" check for checkbox
+            data.rows.push(rowVals);
+        }
+    });
+    const stringData = JSON.stringify(data);
+    const sizeMB = (stringData.length * 2) / 1024 / 1024;
+    document.getElementById('mem-status').innerText = `Memory Load: ${Math.min((sizeMB / MAX_STORAGE_MB) * 100, 100).toFixed(1)}%`;
+    if (sizeMB > MAX_STORAGE_MB) {
+        alert("⚠️ MEMORY LIMIT REACHED: Downloading backup and resetting browser memory.");
+        triggerAutoDownload(stringData);
+        localStorage.removeItem('matsu_scrap_backup');
+        window.location.reload();
+        return;
+    }
+    localStorage.setItem('matsu_scrap_backup', stringData);
+    showToast("💾 Progress Saved");
+}
+
+function triggerAutoDownload(content) {
+    const blob = new Blob([content], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `SAFETY_BACKUP_ScrapLog_${new Date().getTime()}.json`;
+    a.click();
+}
+
+function loadSavedData() {
+    const saved = localStorage.getItem('matsu_scrap_backup');
+    if (!saved) { addNewRow(); return; }
+    const data = JSON.parse(saved);
+    document.getElementById('dept').value = data.header.dept;
+    document.getElementById('shift').value = data.header.shift;
+    document.getElementById('line').value = data.header.line;
+    tbody.innerHTML = '';
+    data.rows.forEach((rowVals) => {
+        addNewRow();
+        const inputs = tbody.lastElementChild.querySelectorAll('input, select');
+        rowVals.forEach((val, i) => { 
+            if(inputs[i]) {
+                if(inputs[i].type === 'checkbox') inputs[i].checked = (val === 'on');
+                else inputs[i].value = val;
+            }
+        });
+    });
+    addNewRow();
+    showToast("📂 Session Recovered");
+}
+
+function clearAllData() {
+    if(confirm("Wipe all data from this computer's memory?")) {
+        localStorage.removeItem('matsu_scrap_backup');
+        window.location.reload();
+    }
+}
+
+function showToast(msg) {
+    const toast = document.getElementById("toast");
+    toast.innerText = msg;
+    toast.className = "show";
+    setTimeout(() => { toast.className = ""; }, 3000);
+}
+
+function transferData() {
+    manualSave(); 
+    const dept = document.getElementById('dept').value || "---";
+    const shift = document.getElementById('shift').value || "---";
+    const line = document.getElementById('line').value || "---";
+    
+    let reportText = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    reportText += `  MASTER SCRAP REPORT: ${dept}\n`;
+    reportText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    reportText += `LINE/MACHINE: ${line}\n`;
+    reportText += `SHIFT:        ${shift}\n`;
+    reportText += `DATE:         ${new Date().toLocaleDateString()}\n`;
+    reportText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
+    const selectedRows = allRows.filter(row => row.querySelector('.row-selector').checked);
+    
+    const rowsToProcess = selectedRows.length > 0 ? selectedRows : allRows.filter(row => row.style.display !== "none");
+
+    let entries = 0;
+    rowsToProcess.forEach(row => {
+        // Skip the checkbox input when gathering data for the email
+        const dataInputs = Array.from(row.querySelectorAll('input.data-input, select.data-input, input.auto-dt'));
+        const vals = dataInputs.map(i => i.value);
+        
+        if (vals[0] || vals[1]) {
+            entries++;
+            reportText += `[ENTRY #${entries}]\n`;
+            reportText += `TAG#:  ${vals[0] || '-'}  | BIN#: ${vals[1] || '-'} | TKT#: ${vals[2] || '-'}\n`;
+            reportText += `WGHT:  ${vals[3] || '-'} lbs | STAT: ${vals[4] || '-'} | #FULL: ${vals[9] || '-'}\n`;
+            reportText += `NEXT:  ${vals[5] || '-'}  | POS:  ${vals[6] || '-'}\n`;
+            reportText += `DATE:  ${vals[7] || '-'}\n`;
+            reportText += `INIT:  ${vals[8] || '-'}\n`;
+            if(vals[10]) reportText += `ISSUE: ${vals[10]}\n`;
+            reportText += `-------------------------------------\n`;
+        }
+    });
+
+    if (entries === 0) return alert("No data found or no rows selected!");
+
+    navigator.clipboard.writeText(reportText).then(() => {
+        showToast("✅ Formatted Report Copied!");
+        window.location.href = `mailto:dmsmith@matcor-matsu.com?subject=Scrap Log - ${line}&body=${encodeURIComponent(reportText)}`;
+    });
+}
+</script>
+</body>
+</html>
