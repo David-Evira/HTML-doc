@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Production Schedule</title>
+
+<style>
+:root {
+  --bg:#0b0f14;
+  --panel:#141a22;
+  --grid:#1f2937;
+  --plan:#f5b942;
+  --text:#e5e7eb;
+  --muted:#8b95a7;
+  --accent: #3b82f6;
+  --danger: #ef4444;
+}
+
+* { box-sizing:border-box; font-family: 'Inter', system-ui, sans-serif; }
+
+body {
+  margin:0;
+  background: radial-gradient(circle at top, #1a2230, var(--bg));
+  color:var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+header {
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--grid);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(11, 15, 20, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+button {
+  background: var(--grid);
+  color: white;
+  border: 1px solid #374151;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+button:hover { background: #2d3748; }
+
+main {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: calc(100vh - 56px);
+}
+
+/* -------- PART LIBRARY -------- */
+#parts {
+  border-right: 1px solid var(--grid);
+  padding: 20px;
+  overflow-y: auto;
+  background: rgba(0,0,0,0.2);
+}
+
+.part-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.data-tools {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 24px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--grid);
+}
+
+.part-card {
+  padding: 12px;
+  border: 1px solid var(--grid);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  background: var(--panel);
+}
+
+.part-card strong { color: #7dd3fc; font-size: 14px; display: block; margin-bottom: 4px;}
+
+.assign-btn {
+    width: 100%;
+    margin-top: 8px;
+    background: transparent;
+    border-color: #374151;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+/* -------- MODAL STYLING -------- */
+#modalOverlay {
+    position: fixed;
+    top:0; left:0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+
+.modal {
+    background: var(--panel);
+    border: 1px solid var(--grid);
+    padding: 24px;
+    border-radius: 12px;
+    width: 320px;
+}
+
+.modal-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-bottom: 1px solid var(--grid);
+    cursor: pointer;
+}
+
+/* -------- SCHEDULE BOARD -------- */
+#grid {
+  display: flex;
+  gap: 20px;
+  padding: 20px;
+  overflow-x: auto;
+  align-items: start;
+}
+
+.press {
+  background: var(--panel);
+  border: 1px solid var(--grid);
+  border-radius: 12px;
+  padding: 16px;
+  min-width: 380px;
+  max-width: 380px;
+}
+
+.run-container {
+    min-height: 20px; /* Essential for dropping into empty press */
+}
+
+/* -------- DRAGGABLE RUNS -------- */
+.run {
+  margin-top: 10px;
+  padding: 10px;
+  border-left: 4px solid var(--plan);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+  transition: transform 0.1s;
+}
+
+.run:active { cursor: grabbing; }
+.run.dragging { opacity: 0.4; transform: scale(0.98); }
+
+.del-run {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-weight: bold;
+    padding: 4px 8px;
+}
+.del-run:hover { color: var(--danger); }
+
+.partSel { flex: 1; min-width: 0; }
+.qty { width: 85px; }
+.time { width: 70px; font-size: 11px; text-align: right; color: #93c5fd; }
+
+select, input {
+  background: #020617;
+  color: white;
+  border: 1px solid var(--grid);
+  padding: 6px;
+  border-radius: 6px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="modalOverlay" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h4 id="modalTitle">Assign Part</h4>
+        <div id="modalPressList" class="modal-list"></div>
+        <button onclick="document.getElementById('modalOverlay').style.display='none'" style="width:100%">Done</button>
+    </div>
+</div>
+
+<header>
+  <strong>Production Schedule</strong>
+  <button onclick="addPress()">+ Add Press</button>
+</header>
+
+<main>
+  <aside id="parts">
+    <div class="data-tools">
+        <button onclick="exportLibrary()" style="flex:1">Export</button>
+        <button onclick="document.getElementById('importFile').click()" style="flex:1">Import</button>
+        <input type="file" id="importFile" hidden onchange="importLibrary(event)">
+    </div>
+
+    <h3 style="font-size: 14px; color: var(--muted);">Part Library</h3>
+    <div class="part-input-group">
+        <input id="partNum" placeholder="Part #" />
+        <input id="partSPM" placeholder="Recipe SPM" type="number" />
+        <button onclick="addPart()" style="background: var(--accent); border:none;">Add Part</button>
+    </div>
+    <div id="partList"></div>
+  </aside>
+
+  <section id="grid"></section>
+</main>
+
+<script>
+const STORE = { parts: "mesh_parts_v4", schedule: "mesh_schedule_v7" };
+let parts = JSON.parse(localStorage.getItem(STORE.parts) || "[]");
+
+/* --- DATA MANAGEMENT --- */
+function exportLibrary() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(parts));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "part_library.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+}
+
+function importLibrary(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const imported = JSON.parse(e.target.result);
+            if (Array.isArray(imported)) {
+                parts = imported;
+                saveParts();
+                location.reload(); // Refresh to update selectors
+            }
+        } catch (err) { alert("Invalid JSON file"); }
+    };
+    reader.readAsText(file);
+}
+
+/* --- DRAG AND DROP --- */
+function initDragAndDrop() {
+    const container = document.getElementById('grid');
+    
+    container.addEventListener('dragstart', e => {
+        if(e.target.classList.contains('run')) {
+            e.target.classList.add('dragging');
+        }
+    });
+
+    container.addEventListener('dragend', e => {
+        if(e.target.classList.contains('run')) {
+            e.target.classList.remove('dragging');
+            saveSchedule();
+        }
+    });
+
+    container.addEventListener('dragover', e => {
+        e.preventDefault();
+        const dragging = document.querySelector('.dragging');
+        const targetContainer = e.target.closest('.run-container');
+        if (!targetContainer || !dragging) return;
+
+        const afterElement = getDragAfterElement(targetContainer, e.clientY);
+        if (afterElement == null) {
+            targetContainer.appendChild(dragging);
+        } else {
+            targetContainer.insertBefore(dragging, afterElement);
+        }
+    });
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.run:not(.dragging)')];
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+/* --- MODAL LOGIC --- */
+function openAssignModal(partNum) {
+    const part = parts.find(p => p.num === partNum);
+    const presses = getPresses();
+    const container = document.getElementById("modalPressList");
+    document.getElementById("modalTitle").innerText = `Assign ${partNum}`;
+    
+    container.innerHTML = presses.map(pr => `
+        <div class="modal-item" onclick="toggleAssign('${partNum}', '${pr.id}')">
+            <input type="checkbox" ${part.presses.includes(pr.id) ? 'checked' : ''} style="pointer-events:none">
+            <span>${pr.name}</span>
+        </div>
+    `).join("");
+    document.getElementById("modalOverlay").style.display = "flex";
+}
+
+function closeModal(e) { document.getElementById("modalOverlay").style.display = "none"; }
+
+/* --- CORE LOGIC --- */
+function getPresses() {
+  return [...document.querySelectorAll(".press")].map(p => ({
+    id: p.dataset.pressId,
+    name: p.querySelector("strong").innerText
+  }));
+}
+
+function saveParts() {
+  localStorage.setItem(STORE.parts, JSON.stringify(parts));
+  renderParts();
+}
+
+function addPart() {
+  const num = partNum.value.trim();
+  const spm = parseFloat(partSPM.value);
+  if (!num || !spm) return;
+  parts.push({ num, spm, presses: [] });
+  partNum.value = partSPM.value = "";
+  saveParts();
+}
+
+function renderParts() {
+  partList.innerHTML = "";
+  parts.forEach(p => {
+    const d = document.createElement("div");
+    d.className = "part-card";
+    const count = p.presses.length;
+    d.innerHTML = `
+      <strong>${p.num}</strong>
+      <div style="font-size:12px; color:var(--muted)">
+        ${p.spm} SPM • <span style="color:${count > 0 ? '#10b981' : '#f59e0b'}">${count} Press(es)</span>
+      </div>
+      <button class="assign-btn" onclick="openAssignModal('${p.num}')">Manage Assignments</button>
+    `;
+    partList.appendChild(d);
+  });
+}
+
+function toggleAssign(partNum, pressId) {
+  const part = parts.find(p => p.num === partNum);
+  part.presses = part.presses.includes(pressId)
+    ? part.presses.filter(id => id !== pressId)
+    : [...part.presses, pressId];
+  saveParts();
+  refreshRunSelectors();
+  openAssignModal(partNum);
+}
+
+function getPartsForPress(pressId) {
+  return parts.filter(p => p.presses.includes(pressId));
+}
+
+function addPress(name="New Press", id=crypto.randomUUID()) {
+  const press = document.createElement("div");
+  press.className = "press";
+  press.dataset.pressId = id;
+  press.innerHTML = `
+    <div class="press-header">
+      <strong contenteditable onblur="saveSchedule(); renderParts();">${name}</strong>
+      <button onclick="removePress(this)" style="border:none; background:none; color:var(--muted)">✕</button>
+    </div>
+    <div class="run-container"></div>
+    <button onclick="addRun(this.closest('.press'))" style="width:100%; margin-top:10px; border-style:dashed; background:transparent">+ Add Run</button>
+  `;
+  grid.appendChild(press);
+  renderParts();
+  saveSchedule();
+}
+
+function removePress(btn) {
+  if(!confirm("Delete entire press?")) return;
+  const press = btn.closest(".press");
+  const id = press.dataset.pressId;
+  parts.forEach(p => p.presses = p.presses.filter(pr => pr !== id));
+  press.remove();
+  saveParts();
+  saveSchedule();
+}
+
+function addRun(press, savedData = null) {
+  const pressId = press.dataset.pressId;
+  const container = press.querySelector(".run-container");
+  const allowed = getPartsForPress(pressId);
+  
+  const run = document.createElement("div");
+  run.className = "run";
+  run.draggable = true;
+  run.innerHTML = `
+      <select class="partSel">
+        <option value="">Select Part...</option>
+        ${allowed.map(p => `<option value="${p.num}">${p.num}</option>`).join("")}
+      </select>
+      <input class="qty" type="number" placeholder="QTY">
+      <div class="time">—</div>
+      <button class="del-run" onclick="this.parentElement.remove(); saveSchedule();">✕</button>
+  `;
+  
+  const sel = run.querySelector(".partSel"), qty = run.querySelector(".qty"), time = run.querySelector(".time");
+  
+  const recalc = () => {
+    const pData = parts.find(p => p.num === sel.value);
+    const q = parseFloat(qty.value);
+    if (!pData || !q) return time.innerText = "—";
+    const min = q / pData.spm;
+    time.innerHTML = `<b>${Math.round(min)}m</b><br><span style="opacity:0.6">${(min/60).toFixed(1)}h</span>`;
+    saveSchedule();
+  };
+
+  sel.onchange = qty.oninput = recalc;
+  
+  if(savedData) {
+      sel.value = savedData.part;
+      qty.value = savedData.qty;
+      recalc();
+  }
+
+  container.appendChild(run);
+}
+
+function refreshRunSelectors() {
+  document.querySelectorAll(".press").forEach(press => {
+    const allowed = getPartsForPress(press.dataset.pressId);
+    press.querySelectorAll(".run select").forEach(sel => {
+        const cur = sel.value;
+        sel.innerHTML = `<option value="">Select Part...</option>` + allowed.map(p => `<option value="${p.num}">${p.num}</option>`).join("");
+        sel.value = allowed.find(p => p.num === cur) ? cur : "";
+    });
+  });
+}
+
+function saveSchedule() {
+  const data = [...document.querySelectorAll(".press")].map(p => ({
+    id: p.dataset.pressId,
+    name: p.querySelector("strong").innerText,
+    runs: [...p.querySelectorAll(".run")].map(r => ({
+      part: r.querySelector("select").value,
+      qty: r.querySelector(".qty").value
+    }))
+  }));
+  localStorage.setItem(STORE.schedule, JSON.stringify(data));
+}
+
+function loadSchedule() {
+  const raw = localStorage.getItem(STORE.schedule);
+  if (!raw) return;
+  JSON.parse(raw).forEach(p => {
+    addPress(p.name, p.id);
+    const press = grid.lastChild;
+    p.runs.forEach(r => addRun(press, r));
+  });
+}
+
+initDragAndDrop();
+renderParts();
+loadSchedule();
+</script>
+</body>
+</html>
