@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>Master Scrap Log</title>
+  <script id="syncScript" src="scrap_data.js"></script>
   <style>
-    :root { --primary: #1a3a5a; --accent: #0078d4; }
-    body { font-family: "Segoe UI", sans-serif; background: #d1d1d1; padding: 10px; }
-    .form-container { width: 98%; margin: auto; background: #fff; padding: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: relative; }
+    :root { --primary: #1a3a5a; --accent: #0078d4; --scale-border: #28a745; --danger: #dc3545; }
+    body { font-family: "Segoe UI", sans-serif; background: #d1d1d1; padding: 10px; margin: 0; }
+    .form-container { width: 99%; margin: 10px auto; background: #fff; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: relative; box-sizing: border-box; }
     .header { border-bottom: 3px solid var(--primary); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
     .top-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
     .input-group { border-bottom: 1px solid #ccc; padding: 5px; }
@@ -17,231 +18,490 @@
     .filter-bar label { font-size: 12px; font-weight: bold; color: var(--primary); }
     .filter-bar input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
 
-    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; table-layout: fixed; }
-    th { background: var(--primary); color: white; font-size: 9px; padding: 8px 2px; text-transform: uppercase; overflow: hidden; }
-    td { border: 1px solid #ccc; overflow: hidden; }
-    td input, td select { width: 100%; height: 35px; border: none; text-align: center; font-size: 12px; outline: none; display: block; box-sizing: border-box; }
+    .log-wrapper { display: flex; flex-direction: column; gap: 10px; }
     
-    /* STABILIZED COLUMN WIDTHS */
-    .col-chk { width: 40px; }
-    .col-tag { width: 85px; }
-    .col-bin { width: 70px; }
-    .col-tkt { width: 85px; }
-    .col-wgt { width: 70px; }
-    .col-stat { width: 80px; }
-    .col-next { width: 80px; }
-    .col-pos { width: 80px; }
-    .col-dt { width: 150px; }
-    .col-init { width: 50px; }
-    .col-full { width: 65px; }
-    .col-note { width: auto; }
+    .tables-flex { display: flex; gap: 10px; align-items: stretch; } 
+    .card { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; }
+    
+    .card-primary { flex: 3.8; min-width: 0; } 
+    .card-scale { flex: 1.6; min-width: 0; border-top: 4px solid var(--scale-border); }
+    
+    .card-title { font-size: 12px; font-weight: bold; color: var(--primary); margin-bottom: 8px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; height: 25px; }
 
-    .chk-col { text-align: center; vertical-align: middle; }
-    .chk-col input[type="checkbox"] { width: 18px; height: 18px; margin: auto; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th { background: var(--primary); color: white; font-size: 9px; padding: 6px 1px; text-transform: uppercase; }
+    .card-scale th { background: var(--scale-border); }
+    td { border: 1px solid #ccc; height: 32px; vertical-align: middle; }
+    td input, td select { width: 100%; height: 100%; border: none; text-align: center; font-size: 11px; outline: none; box-sizing: border-box; }
     
-    .auto-dt { background-color: #f0f7ff; cursor: pointer; font-weight: bold; color: #005a9e; }
-    .btn-container { display: flex; justify-content: flex-end; gap: 10px; align-items: center; }
-    .btn { padding: 10px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+    .col-del { width: 60px; text-align: center; }
+    .col-chk { width: 30px; text-align: center; }
+    .col-tag { width: 65px; }
+    .col-bin { width: 45px; } 
+    .col-curpos { width: 40px; } 
+    .col-wgt { width: 55px; }
+    .col-stat { width: 65px; }
+    .col-next { width: 60px; } 
+    .col-nextpos { width: 55px; } 
+    .col-dt { width: 145px; } 
+    .col-init { width: 35px; }
+    .col-full { width: 40px; }
+    .col-comment { width: auto; }
+
+    .col-s-tkt { width: 50px; }
+    .col-s-wgt { width: 75px; } 
+    .col-s-type { width: 65px; }
+    .col-s-dt { width: 135px; } 
+    .col-s-init { width: 30px; }
+
+    .btn-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 18px; width: 100%; height: 100%; }
+    .row-selector { width: 16px !important; height: 16px !important; cursor: pointer; margin: 0 auto; display: block; }
+    .btn-add { background: var(--primary); color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; }
+    .auto-dt { background-color: #f0f7ff; cursor: text; font-weight: bold; color: #005a9e; font-size: 10px !important; }
+    
+    .pagination-bar { display: flex; justify-content: center; align-items: center; gap: 20px; padding: 8px; background: #f1f1f1; border-radius: 4px; }
+    .btn-container { display: flex; justify-content: flex-end; gap: 10px; align-items: center; margin-top: 10px; }
+    .btn { padding: 8px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 12px; }
     .btn-copy { background: var(--accent); color: white; }
     .btn-save { background: #28a745; color: white; }
-    #mem-status { font-size: 10px; color: #888; margin-right: auto; }
-    #toast { visibility: hidden; min-width: 300px; background: #333; color: #fff; text-align: center; border-radius: 8px; padding: 15px; position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 100; }
+    
+    #mem-status { font-size: 10px; color: #888; margin-right: auto; display: flex; gap: 15px; }
+    .status-dot { height: 8px; width: 8px; background-color: #bbb; border-radius: 50%; display: inline-block; margin-right: 4px; }
+    .status-active { background-color: #28a745; box-shadow: 0 0 5px #28a745; }
+    #toast { visibility: hidden; min-width: 250px; background: #333; color: #fff; text-align: center; border-radius: 8px; padding: 12px; position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 100; font-size: 13px;}
     #toast.show { visibility: visible; }
+
+    #lockout-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; visibility: hidden; opacity: 0; transition: opacity 0.4s ease; }
+    #lockout-screen.active { visibility: visible; opacity: 1; pointer-events: all; }
+    .lock-box { background: #fff; padding: 40px 60px; border-radius: 16px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); border-top: 10px solid var(--danger); max-width: 450px; }
+    .warning-icon { font-size: 60px; display: block; animation: pulse-warn 2s infinite; }
   </style>
 </head>
 <body onload="loadSavedData()">
 
+<div id="lockout-screen">
+    <div class="lock-box">
+        <span class="warning-icon">⚠️</span>
+        <h1>SYSTEM OFFLINE</h1>
+        <p>The Sync Script is not running.</p>
+    </div>
+</div>
+
 <div class="form-container">
   <div class="header">
-    <h1 style="color:var(--primary); margin:0; font-size: 20px;">MASTER SCRAP TRACKING LOG</h1>
+    <h1 style="color:var(--primary); margin:0; font-size: 18px;">MASTER SCRAP LOG</h1>
+    <div id="sync-info" style="font-size: 11px; color: #666; font-style: italic;">Checking shared drive...</div>
   </div>
 
   <div class="top-inputs">
-    <div class="input-group"><label>DEPARTMENT</label><input type="text" id="dept" value="Stamping"></div>
+    <div class="input-group"><label>DEPT</label><input type="text" id="dept" value="Stamping"></div>
     <div class="input-group"><label>SHIFT</label><input type="text" id="shift" placeholder="Shift"></div>
-    <div class="input-group"><label>LINE / MACHINE</label><input type="text" id="line" placeholder="Press #"></div>
+    <div class="input-group"><label>LINE/MACHINE</label><input type="text" id="line" placeholder="Press #"></div>
   </div>
 
   <div class="filter-bar">
-    <label>🔍 FILTER BY DATE:</label>
-    <input type="text" id="dateFilter" placeholder="e.g. 12/22/2025" oninput="filterTable()">
-    <span style="font-size: 10px; color: #666;">(Showing all rows if none selected)</span>
+    <label>🔍 FILTER:</label>
+    <input type="text" id="dateFilter" placeholder="Search Tag, Bin, or Date..." oninput="handleFilter()">
   </div>
 
-  <table id="logTable">
-    <thead>
-      <tr>
-        <th class="col-chk">Select</th>
-        <th class="col-tag">Tag #</th>
-        <th class="col-bin">Bin #</th>
-        <th class="col-tkt">Scale Tkt #</th>
-        <th class="col-wgt">Weight</th>
-        <th class="col-stat">Status</th>
-        <th class="col-next">Next Bin</th>
-        <th class="col-pos">Position</th>
-        <th class="col-dt">Date/Time (Click)</th>
-        <th class="col-init">Init</th>
-        <th class="col-full"># Full</th>
-        <th class="col-note">Issue / Comments</th>
-      </tr>
-    </thead>
-    <tbody id="tableBody"></tbody>
-  </table>
+  <div class="log-wrapper">
+    <div class="tables-flex">
+        <div class="card card-primary">
+          <div class="card-title">
+              Changeover Log
+              <button class="btn-add" onclick="addNewEntry()">+ Add Row</button>
+          </div>
+          <table id="logTable">
+            <thead>
+              <tr>
+                <th class="col-del">Act</th>
+                <th class="col-chk"><input type="checkbox" onclick="toggleSelectAll(this)"></th>
+                <th class="col-tag">Tag #</th>
+                <th class="col-bin">Bin #</th>
+                <th class="col-curpos">Pos</th>
+                <th class="col-wgt">Lbs</th>
+                <th class="col-stat">Stat</th>
+                <th class="col-next">Nxt Bin</th>
+                <th class="col-nextpos">Nxt P</th>
+                <th class="col-dt">Date/Time</th>
+                <th class="col-init">In</th>
+                <th class="col-full">F#</th>
+                <th class="col-comment">Comments / Issues</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card card-scale">
+          <div class="card-title">Scaled</div>
+          <table id="scaleTable">
+            <thead>
+              <tr>
+                <th class="col-s-tkt">Tkt #</th>
+                <th class="col-s-wgt">Act Lbs</th>
+                <th class="col-s-type">Type</th>
+                <th class="col-s-dt">Scale Time</th>
+                <th class="col-s-init">In</th>
+              </tr>
+            </thead>
+            <tbody id="scaleBody"></tbody>
+          </table>
+        </div>
+    </div>
+
+    <div class="pagination-bar">
+        <button class="btn-add" onclick="changePage(-1)">« Prev</button>
+        <span id="page-display" style="font-weight: bold; color: var(--primary); font-size: 13px;">Page 1 of 1</span>
+        <button class="btn-add" onclick="changePage(1)">Next »</button>
+    </div>
+  </div>
 
   <div class="btn-container">
-    <div id="mem-status">Memory Load: 0%</div>
-    <button class="btn" style="background:#e0e0e0" onclick="clearAllData()">Reset Form</button>
-    <button class="btn btn-save" onclick="manualSave()">Save Progress</button>
-    <button class="btn btn-copy" onclick="transferData()">Compile & Send Email</button>
+    <div id="mem-status">
+        <span><span id="dot" class="status-dot status-active"></span> Disk Link: <span id="last-sync-time">Standby</span></span>
+    </div>
+    <button id="btn-reset" class="btn" style="background:#e0e0e0" onclick="clearAllData()">Reset</button>
+    <button id="btn-pdf" class="btn" style="background:#0078d4; color:white;" onclick="generatePDF()">PDF</button> 
+    <button id="btn-save" class="btn btn-save" onclick="handlePhysicalSave()">Save</button>
+    <button id="btn-email" class="btn btn-copy" onclick="transferData()">Email Report</button>
   </div>
   <div id="toast">✅ Action Successful</div>
 </div>
 
 <script>
+// --- ADMIN WHITELIST CONFIG ---
+// Add the Windows Usernames allowed to use Action Buttons here (lowercase)
+const WHITELIST = [];
+
 const tbody = document.getElementById('tableBody');
-const MAX_STORAGE_MB = 4.0;
+const sbody = document.getElementById('scaleBody');
 
-function addNewRow() {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-        <td class="chk-col"><input type="checkbox" class="row-selector"></td>
-        <td><input type="text" class="data-input" placeholder="Tag #"></td>
-        <td><input type="text" class="data-input" placeholder="Bin #"></td>
-        <td><input type="text" class="data-input" placeholder="Ticket #"></td>
-        <td><input type="text" class="data-input" placeholder="Lbs"></td>
-        <td><select class="data-input"><option value="">--</option><option value="Full">Full</option><option value="Partial">Partial</option></select></td>
-        <td><input type="text" class="data-input"></td>
-        <td><input type="text" class="data-input"></td>
-        <td><input type="text" class="auto-dt" readonly placeholder="Timestamp" onclick="captureTime(this)"></td>
-        <td><input type="text" class="data-input"></td>
-        <td><input type="text" class="data-input"></td>
-        <td><input type="text" class="data-input" placeholder="Notes/Issues"></td>
-    `;
-    tbody.appendChild(tr);
-    tr.addEventListener('input', function() {
-        if (this === tbody.lastElementChild) addNewRow();
-    }, { once: true });
-}
+let masterData = []; 
+let currentPage = 1;
+const rowsPerPage = 25;
+let filteredIndices = [];
 
-function filterTable() {
-    const filterValue = document.getElementById('dateFilter').value.toLowerCase();
-    const rows = tbody.querySelectorAll('tr');
-    rows.forEach(row => {
-        const dateField = row.querySelector('.auto-dt');
-        if (dateField) {
-            const dateValue = dateField.value.toLowerCase();
-            row.style.display = (dateValue.includes(filterValue) || filterValue === "") ? "" : "none";
+(function loadPDFScripts() {
+    const scripts = ["https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"];
+    scripts.forEach(src => {
+        if (!document.querySelector(`script[src="${src}"]`)) {
+            const s = document.createElement('script'); s.src = src; s.async = false; document.head.appendChild(s);
+        }
+    });
+})();
+
+const antiTamper = new MutationObserver(() => {
+    if (window.systemActive === false) {
+        const lock = document.getElementById('lockout-screen');
+        if (!lock || !lock.classList.contains('active')) window.location.reload();
+    }
+});
+antiTamper.observe(document.body, { attributes: true, childList: true, subtree: true });
+
+function checkPermissions() {
+    // currentUser comes from heartbeat.js generated by the bat file
+    const user = (typeof currentUser !== 'undefined') ? currentUser.toLowerCase() : "unknown";
+    const hasAccess = WHITELIST.map(u => u.toLowerCase()).includes(user);
+
+    const actionButtons = [
+        document.getElementById('btn-reset'),
+        document.getElementById('btn-pdf'),
+        document.getElementById('btn-save'),
+        document.getElementById('btn-email')
+    ];
+
+    actionButtons.forEach(btn => {
+        if (btn) {
+            if (hasAccess) {
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                btn.style.cursor = "pointer";
+                btn.title = "";
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = "0.3";
+                btn.style.cursor = "not-allowed";
+                btn.title = `Access Denied: User '${user}' is not on the whitelist.`;
+            }
         }
     });
 }
 
-function captureTime(field) {
-    if (!field.value) {
+function checkHeartbeat() {
+    const oldHb = document.getElementById('heartbeatLoader');
+    if (oldHb) oldHb.remove();
+    const hb = document.createElement('script');
+    hb.id = 'heartbeatLoader'; hb.src = 'heartbeat.js?v=' + Math.random(); 
+    hb.onload = () => { 
+        if (window.systemActive) {
+            document.getElementById('lockout-screen').classList.remove('active');
+            checkPermissions(); // Run permission check whenever heartbeat updates
+        }
+    };
+    hb.onerror = () => { document.getElementById('lockout-screen').classList.add('active'); window.systemActive = false; };
+    document.head.appendChild(hb);
+}
+checkHeartbeat(); setInterval(checkHeartbeat, 2000);
+
+function loadSavedData() {
+    let data;
+    const local = localStorage.getItem('matsu_scrap_backup');
+    if (typeof savedScrapData !== 'undefined') data = savedScrapData;
+    else if (local) data = JSON.parse(local);
+
+    if (data && data.rows) {
+        document.getElementById('dept').value = data.header.dept || "Stamping";
+        document.getElementById('shift').value = data.header.shift || "";
+        document.getElementById('line').value = data.header.line || "";
+        
+        masterData = data.rows.map((r, i) => ({
+            main: r, 
+            scale: (data.scaleRows && data.scaleRows[i]) ? data.scaleRows[i] : ["", "", "", "", ""]
+        }));
+    }
+    
+    if (masterData.length === 0) addNewEntry(false);
+    handleFilter(); 
+}
+
+function renderTable() {
+    tbody.innerHTML = ''; 
+    sbody.innerHTML = '';
+    let displayList = document.getElementById('dateFilter').value ? filteredIndices : [...masterData.keys()];
+    displayList.reverse();
+
+    const totalPages = Math.ceil(displayList.length / rowsPerPage) || 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+    document.getElementById('page-display').innerText = `Page ${currentPage} of ${totalPages}`;
+
+    const start = (currentPage - 1) * rowsPerPage;
+    const end = start + rowsPerPage;
+    const pageIndices = displayList.slice(start, end);
+
+    pageIndices.forEach(globalIdx => {
+        const item = masterData[globalIdx];
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="col-del">
+                <div style="display: flex; justify-content: center; gap: 2px;">
+                    <button class="btn-del" onclick="deleteEntry(${globalIdx})" style="width:24px; height:24px; font-size:14px; border:1px solid #ffcccc; background:#fff5f5;">×</button>
+                    <button class="btn-add" onclick="insertEntry(${globalIdx})" style="width:24px; height:24px; font-size:14px;">+</button>
+                </div>
+            </td>
+            <td class="col-chk"><input type="checkbox" class="row-selector" ${item.main[1] === 'on' ? 'checked' : ''} onchange="updateCell(${globalIdx}, 'main', 1, this.checked ? 'on' : 'off')"></td>
+            <td class="col-tag"><input type="text" value="${item.main[2] || ''}" oninput="updateCell(${globalIdx}, 'main', 2, this.value)"></td>
+            <td class="col-bin"><input type="text" value="${item.main[3] || ''}" oninput="updateCell(${globalIdx}, 'main', 3, this.value)"></td>
+            <td class="col-curpos"><input type="text" value="${item.main[4] || ''}" oninput="updateCell(${globalIdx}, 'main', 4, this.value)"></td>
+            <td class="col-wgt"><input type="text" value="${item.main[5] || ''}" oninput="updateCell(${globalIdx}, 'main', 5, this.value)"></td>
+            <td class="col-stat">
+                <select onchange="updateCell(${globalIdx}, 'main', 6, this.value)">
+                    <option value="">--</option>
+                    <option value="Full" ${item.main[6] === 'Full' ? 'selected' : ''}>Full</option>
+                    <option value="Partial" ${item.main[6] === 'Partial' ? 'selected' : ''}>Part</option>
+                </select>
+            </td>
+            <td class="col-next"><input type="text" value="${item.main[7] || ''}" oninput="updateCell(${globalIdx}, 'main', 7, this.value)"></td>
+            <td class="col-nextpos"><input type="text" value="${item.main[8] || ''}" oninput="updateCell(${globalIdx}, 'main', 8, this.value)"></td>
+            <td class="col-dt"><input type="text" class="auto-dt" value="${item.main[9] || ''}" onclick="captureTimeCell(${globalIdx}, 'main', 9, this)" oninput="updateCell(${globalIdx}, 'main', 9, this.value)"></td>
+            <td class="col-init"><input type="text" value="${item.main[10] || ''}" oninput="updateCell(${globalIdx}, 'main', 10, this.value)"></td>
+            <td class="col-full"><input type="text" value="${item.main[11] || ''}" oninput="updateCell(${globalIdx}, 'main', 11, this.value)"></td>
+            <td class="col-comment"><input type="text" value="${item.main[12] || ''}" oninput="updateCell(${globalIdx}, 'main', 12, this.value)" style="text-align:left; padding-left:5px;"></td>
+        `;
+        tbody.appendChild(tr);
+
+        const trS = document.createElement('tr');
+        const actualLbs = parseFloat(item.scale[1]);
+        const isOverload = !isNaN(actualLbs) && actualLbs >= 30000;
+        const weightStyle = isOverload ? 'color: #dc3545; font-weight: bold;' : '';
+        const warningIcon = isOverload ? '<span title="MAX BIN WEIGHT EXCEEDED (30K)" style="cursor:help; margin-right: 4px;">⚠️</span>' : '';
+
+        trS.innerHTML = `
+            <td class="col-s-tkt"><input type="text" value="${item.scale[0] || ''}" oninput="updateCell(${globalIdx}, 'scale', 0, this.value)"></td>
+            <td class="col-s-wgt">
+                <div style="display: flex; align-items: center; justify-content: center; height:100%;">
+                    ${warningIcon}
+                    <input type="text" style="${weightStyle}" 
+                        value="${item.scale[1] || ''}" 
+                        oninput="updateCell(${globalIdx}, 'scale', 1, this.value)"
+                        onchange="renderTable()">
+                </div>
+            </td>
+            <td class="col-s-type"><select onchange="updateCell(${globalIdx}, 'scale', 2, this.value)">
+                <option value="">--</option>
+                <option value="Bush" ${item.scale[2] === 'Bush' ? 'selected' : ''}>Bush</option>
+                <option value="Misc" ${item.scale[2] === 'Misc' ? 'selected' : ''}>Misc</option>
+            </select></td>
+            <td class="col-s-dt"><input type="text" class="auto-dt" value="${item.scale[3] || ''}" onclick="captureTimeCell(${globalIdx}, 'scale', 3, this)" oninput="updateCell(${globalIdx}, 'scale', 3, this.value)"></td>
+            <td class="col-s-init"><input type="text" value="${item.scale[4] || ''}" oninput="updateCell(${globalIdx}, 'scale', 4, this.value)"></td>
+        `;
+        sbody.appendChild(trS);
+    });
+}
+
+function insertEntry(idx) {
+    masterData.splice(idx, 0, { main: Array(13).fill(""), scale: Array(5).fill("") });
+    saveToLocalStorage();
+    handleFilter(); 
+    showToast("➕ Row Inserted");
+}
+
+function updateCell(idx, part, col, val) {
+    masterData[idx][part][col] = val;
+    saveToLocalStorage();
+}
+
+function captureTimeCell(idx, part, col, el) {
+    if (el.value === "") {
         const now = new Date();
-        field.value = now.toLocaleDateString() + " " + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        manualSave();
+        const timeStr = now.toLocaleDateString() + " " + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        el.value = timeStr;
+        updateCell(idx, part, col, timeStr);
     }
 }
 
-function manualSave() {
-    const data = {
+function addNewEntry(render = true) {
+    masterData.push({ main: Array(13).fill(""), scale: Array(5).fill("") });
+    saveToLocalStorage();
+    if(render) {
+        handleFilter();
+        currentPage = 1;
+        renderTable();
+    }
+}
+
+function deleteEntry(idx) {
+    if(confirm("Delete entry?")) {
+        masterData.splice(idx, 1);
+        if(masterData.length === 0) addNewEntry(false);
+        saveToLocalStorage();
+        handleFilter();
+    }
+}
+
+function toggleSelectAll(masterBox) {
+    const val = masterBox.checked ? 'on' : 'off';
+    masterData.forEach((_, i) => updateCell(i, 'main', 1, val));
+    renderTable();
+}
+
+function changePage(dir) {
+    const totalPages = Math.ceil((document.getElementById('dateFilter').value ? filteredIndices.length : masterData.length) / rowsPerPage);
+    const targetPage = currentPage + dir;
+    if(targetPage > 0 && targetPage <= totalPages) {
+        currentPage = targetPage;
+        renderTable();
+    }
+}
+
+function handleFilter() {
+    const term = document.getElementById('dateFilter').value.toLowerCase();
+    if (!term) {
+        filteredIndices = [...masterData.keys()];
+    } else {
+        filteredIndices = masterData.reduce((acc, curr, idx) => {
+            if ((curr.main[2] && curr.main[2].toLowerCase().includes(term)) || 
+                (curr.main[3] && curr.main[3].toLowerCase().includes(term)) || 
+                (curr.main[9] && curr.main[9].toLowerCase().includes(term))) {
+                acc.push(idx);
+            }
+            return acc;
+        }, []);
+    }
+    renderTable();
+}
+
+function compileData() {
+    return {
         saveTime: new Date().getTime(),
         header: {
             dept: document.getElementById('dept').value,
             shift: document.getElementById('shift').value,
             line: document.getElementById('line').value
         },
-        rows: []
+        rows: masterData.map(d => d.main),
+        scaleRows: masterData.map(d => d.scale)
     };
-    document.querySelectorAll("#tableBody tr").forEach(row => {
-        const inputs = Array.from(row.querySelectorAll('input, select'));
-        const rowVals = inputs.map(i => (i.type === 'checkbox') ? (i.checked ? "on" : "off") : i.value);
-        if (rowVals.some((v, idx) => idx !== 0 && v !== "" && v !== "--")) {
-            data.rows.push(rowVals);
-        }
-    });
-    localStorage.setItem('matsu_scrap_backup', JSON.stringify(data));
-    showToast("💾 Progress Saved");
 }
 
-function loadSavedData() {
-    const saved = localStorage.getItem('matsu_scrap_backup');
-    if (!saved) { addNewRow(); return; }
-    const data = JSON.parse(saved);
-    document.getElementById('dept').value = data.header.dept;
-    document.getElementById('shift').value = data.header.shift;
-    document.getElementById('line').value = data.header.line;
-    tbody.innerHTML = '';
-    data.rows.forEach((rowVals) => {
-        addNewRow();
-        const inputs = tbody.lastElementChild.querySelectorAll('input, select');
-        rowVals.forEach((val, i) => { 
-            if(inputs[i]) {
-                if(inputs[i].type === 'checkbox') inputs[i].checked = (val === 'on');
-                else inputs[i].value = val;
-            }
-        });
-    });
-    addNewRow();
+function saveToLocalStorage() {
+    localStorage.setItem('matsu_scrap_backup', JSON.stringify(compileData()));
 }
 
-function clearAllData() {
-    if(confirm("Wipe all data from this computer's memory?")) {
-        localStorage.removeItem('matsu_scrap_backup');
-        window.location.reload();
-    }
-}
-
-function showToast(msg) {
-    const toast = document.getElementById("toast");
-    toast.innerText = msg;
-    toast.className = "show";
-    setTimeout(() => { toast.className = ""; }, 3000);
+function handlePhysicalSave() {
+    const data = compileData();
+    const blob = new Blob(["var savedScrapData = " + JSON.stringify(data) + ";"], { type: 'text/javascript' });
+    const a = document.createElement('a'); a.download = 'SCRAP_EXPORT_DATA.txt'; a.href = URL.createObjectURL(blob); a.click();
+    document.getElementById('last-sync-time').innerText = "Linked: " + new Date().toLocaleTimeString();
+    showToast("💾 Sent to Shared Drive...");
 }
 
 function transferData() {
-    manualSave(); 
-    const dept = document.getElementById('dept').value || "---";
-    const shift = document.getElementById('shift').value || "---";
-    const line = document.getElementById('line').value || "---";
-    
-    let reportText = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    reportText += `  MASTER SCRAP REPORT: ${dept}\n`;
-    reportText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    reportText += `LINE/MACHINE: ${line}\n`;
-    reportText += `SHIFT:        ${shift}\n`;
-    reportText += `DATE:         ${new Date().toLocaleDateString()}\n`;
-    reportText += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    const data = compileData();
+    const selectedEntries = masterData.filter(item => item.main[1] === 'on');
+    const isSelectedMode = selectedEntries.length > 0;
+    const listToProcess = isSelectedMode ? selectedEntries : masterData.filter(item => item.main[2] || item.main[3]);
 
-    const allRows = Array.from(document.querySelectorAll("#tableBody tr"));
-    const selectedRows = allRows.filter(row => row.querySelector('.row-selector')?.checked);
-    const rowsToProcess = selectedRows.length > 0 ? selectedRows : allRows.filter(row => row.style.display !== "none");
+    if (listToProcess.length === 0) { showToast("⚠️ Nothing to send!"); return; }
 
-    let entries = 0;
-    rowsToProcess.forEach(row => {
-        const dataInputs = Array.from(row.querySelectorAll('input.data-input, select.data-input, input.auto-dt'));
-        const vals = dataInputs.map(i => i.value);
-        if (vals[0] || vals[1]) {
-            entries++;
-            reportText += `[ENTRY #${entries}]\n`;
-            reportText += `TAG#:  ${vals[0] || '-'}  | BIN#: ${vals[1] || '-'} | TKT#: ${vals[2] || '-'}\n`;
-            reportText += `WGHT:  ${vals[3] || '-'} lbs | STAT: ${vals[4] || '-'} | #FULL: ${vals[9] || '-'}\n`;
-            reportText += `NEXT:  ${vals[5] || '-'}  | POS:  ${vals[6] || '-'}\n`;
-            reportText += `DATE:  ${vals[7] || '-'}\n`;
-            reportText += `INIT:  ${vals[8] || '-'}\n`;
-            if(vals[10]) reportText += `ISSUE: ${vals[10]}\n`;
-            reportText += `-------------------------------------\n`;
-        }
+    let reportText = `MASTER SCRAP REPORT\nDEPT: ${data.header.dept} | SHIFT: ${data.header.shift} | LINE: ${data.header.line}\nMODE: ${isSelectedMode ? 'SELECTED ROWS ONLY' : 'FULL LOG'}\n=====================================\n\n`;
+    listToProcess.forEach((item) => {
+        reportText += `[ENTRY]\n• Tag #: ${item.main[2] || 'N/A'}\n• Bin #: ${item.main[3] || 'N/A'}\n• Cur Pos: ${item.main[4] || ''}\n• Est Lbs: ${item.main[5] || ''}\n• Status: ${item.main[6] || ''}\n• Next Bin: ${item.main[7] || ''}\n• Next Pos: ${item.main[8] || ''}\n• Date/Time: ${item.main[9] || ''}\n• Initials: ${item.main[10] || ''}\n• # Full: ${item.main[11] || ''}\n• Comments: ${item.main[12] || ''}\n-------------------------------------\n\n`;
     });
-
-    if (entries === 0) return alert("No data found!");
 
     navigator.clipboard.writeText(reportText).then(() => {
-        showToast("✅ Formatted Report Copied!");
-        // Email field is now blank
-        window.location.href = `mailto:?subject=Scrap Log - ${line}&body=${encodeURIComponent(reportText)}`;
+        showToast(`✅ Copied ${listToProcess.length} row(s) & Email Opening...`);
+        window.location.href = `mailto:?subject=Scrap Log (${listToProcess.length} entries) - ${data.header.dept}&body=${encodeURIComponent(reportText)}`;
     });
 }
+
+async function generatePDF() {
+    if (typeof window.jspdf === 'undefined') { showToast("⏳ Library Error"); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4'); 
+    const data = compileData();
+
+    const isFiltered = document.getElementById('dateFilter').value.length > 0;
+    const sourceIndices = isFiltered ? filteredIndices : [...masterData.keys()];
+
+    doc.setFontSize(14); 
+    doc.text("MASTER SCRAP TRACKING - CONSOLIDATED REPORT", 14, 12);
+    doc.setFontSize(9); 
+    doc.text(`Dept: ${data.header.dept} | Line: ${data.header.line} | Total Rows: ${sourceIndices.length}`, 14, 18);
+    if(isFiltered) doc.text("(Filtered View)", 14, 22);
+
+    const pdfRows = sourceIndices.map(idx => {
+        const d = masterData[idx];
+        return [
+            d.main[2], d.main[3], d.main[4], d.main[5], d.main[6], d.main[7], d.main[8], d.main[9], d.main[10], d.main[11], d.main[12],
+            d.scale[0], d.scale[1], d.scale[2], d.scale[3], d.scale[4]
+        ];
+    });
+
+    doc.autoTable({
+        startY: isFiltered ? 26 : 24,
+        head: [[
+            {content: 'Changeover Log Details', colSpan: 11, styles: {fillColor: [26, 58, 90], halign: 'center'}},
+            {content: 'Scaled Details', colSpan: 5, styles: {fillColor: [40, 167, 69], halign: 'center'}}
+        ], [
+            "Tag #", "Bin #", "Pos", "Est Lbs", "Stat", "Nxt B", "Nxt P", "Date/Time", "Init", "F#", "Comments",
+            "Tkt #", "Act Lbs", "Type", "Scale Time", "In"
+        ]],
+        body: pdfRows,
+        theme: 'grid',
+        headStyles: { fillColor: [26, 58, 90], fontSize: 6, cellPadding: 1 },
+        styles: { fontSize: 6, cellPadding: 1, halign: 'center', overflow: 'linebreak' },
+        columnStyles: {
+            10: { cellWidth: 35, halign: 'left' }, 
+            14: { cellWidth: 25 }                                  
+        },
+        margin: { top: 25 }
+    });
+
+    doc.save(`ScrapLog_Export_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+function clearAllData() { if(confirm("Wipe all data?")) { localStorage.removeItem('matsu_scrap_backup'); window.location.reload(); } }
+function showToast(msg) { const t = document.getElementById("toast"); t.innerText = msg; t.className = "show"; setTimeout(() => t.className = "", 3000); }
 </script>
 </body>
 </html>
