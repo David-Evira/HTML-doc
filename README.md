@@ -1,14 +1,14 @@
 Master Scrap Sync System
 A background-processing synchronization and archival engine for industrial scrap logging. This system bridges a browser-based dashboard with the local file system to automate data backups and PDF document organization.
 
-🛠 Project Components
+Project Components
 ScrapLog.html: The user interface (The Dashboard).
 START_APP.bat: The bootloader that initializes the environment.
 SyncScrap.bat: The core engine (Logic) that monitors files.
 SilentSync.vbs: A wrapper that runs the engine invisibly.
 STOP_SYNC.bat: The emergency stop and cleanup utility.
 
-🏗 System Architecture
+System Architecture
 1. The Startup Pipeline (START_APP.bat)
 Initialization: Kills existing instances and deletes old heartbeat files to prevent "ghost" processes.
 Hidden Execution: Launches SilentSync.vbs, triggering the engine in a hidden window.
@@ -24,7 +24,7 @@ Smart Archiving: Detects PDF exports and organizes them into: Scrap_History/[Yea
 Monitoring: Checks for the heartbeat every 2s. If missing, a "SYSTEM OFFLINE" lockout screen triggers.
 Permissions: Compares user ID against a WHITELIST. Unauthorized users have action buttons disabled.
 
-🧠 Technical Logic (Pseudocode)
+Technical Logic (Pseudocode)
 Core Sync Engine
 
 INITIALIZE:
@@ -55,7 +55,7 @@ FUNCTION checkHeartbeat():
         SHOW "SYSTEM OFFLINE" Overlay
         DISABLE Action Buttons
         
-🚀 Setup & Installation
+Setup & Installation
 Clone this repository to a local directory.
 Open ScrapLog.html and add authorized Windows IDs to the WHITELIST array.
 Edit SyncScrap.bat and set the G_DRIVE_BACKUP variable to your network share path.
