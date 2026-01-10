@@ -1,36 +1,39 @@
-@echo off
-title STOP_SCRAP_SYNC
-cd /d "%~dp0"
+# PSEUDOCODE: STOP_SCRAP_SYNC
 
-echo [CHECKING] System status...
+PURPOSE:
+    To gracefully terminate background synchronization and 
+    immediately trigger the UI lockout mechanism.
 
-:: Check if the sync task is actually running
-tasklist /FI "WINDOWTITLE eq SCRAP_SYNC_TASK*" | find /i "cmd.exe" >nul
-if errorlevel 1 (
-    echo [INFO] Sync Task not found. Checking for stray heartbeat...
-    if exist "heartbeat.js" del /q "heartbeat.js"
-    echo [SUCCESS] System is already OFFLINE.
-) else (
-    echo [TERMINATING] Stopping Scrap Sync background tasks...
-
-    :: 1. Delete heartbeat FIRST to trigger immediate HTML lockout
-    :: We use a loop to ensure it's deleted even if the file is momentarily locked
-    del /q "heartbeat.js" >nul 2>&1
-    timeout /t 1 /nobreak >nul
-    if exist "heartbeat.js" del /f /q "heartbeat.js"
-
-    :: 2. Force kill the background process
-    taskkill /FI "WINDOWTITLE eq SCRAP_SYNC_TASK*" /F >nul 2>&1
+CHECK STATUS:
+    SCAN active system processes for "SCRAP_SYNC_TASK"
     
-    :: 3. Final verification of cleanup
-    if exist "heartbeat.js" (
-        echo [RETRY] Forcing heartbeat removal...
-        timeout /t 1 /nobreak >nul
-        del /f /q "heartbeat.js"
-    )
+    IF task is NOT FOUND:
+        DISPLAY "System already offline"
+        IF heartbeat.js exists: DELETE heartbeat.js (Cleanup stray files)
+        EXIT
+        
+    ELSE (Task is running):
+        DISPLAY "Terminating background tasks..."
 
-    echo [SUCCESS] Heartbeat removed and Process terminated.
-    echo System is now OFFLINE.
-)
+        # --- STEP 1: UI LOCKOUT ---
+        DELETE heartbeat.js
+        (We do this first so the web UI locks buttons immediately)
+        
+        WAIT 1 second (Allow file system to release locks)
+        
+        IF heartbeat.js STILL EXISTS:
+            FORCE DELETE heartbeat.js (Override read-only/lock)
 
-pause
+        # --- STEP 2: PROCESS TERMINATION ---
+        FORCE KILL process with window title "SCRAP_SYNC_TASK"
+        
+        # --- STEP 3: FINAL VERIFICATION ---
+        WAIT 1 second
+        IF heartbeat.js exists:
+            RETRY FORCE DELETE heartbeat.js
+            
+        DISPLAY "System Offline: Heartbeat removed and process terminated"
+
+FINALIZE:
+    PAUSE to allow user to read status
+    EXIT
