@@ -1,62 +1,174 @@
-Master Scrap Sync System
-A background-processing synchronization and archival engine for industrial scrap logging. This system bridges a browser-based dashboard with the local file system to automate data backups and PDF document organization.
+( Work in progress ) Master Scrap Sync System
+
+Master Scrap Sync System is a background-processing synchronization and archival engine designed for industrial scrap logging environments.
+It bridges a browser-based dashboard with the local Windows file system to automate:
+- authoritative data saves
+- background backups
+- structured PDF archiving
+The system is intentionally offline-first, serverless, and operator-safe, making it suitable for shop-floor and shared workstation use.
+
+Key Design Goals
+No database or server dependency
+Single authoritative write node
+Read-only replicas for visibility
+Silent background operation
+Clear failure detection and lockout behavior
 
 Project Components
-ScrapLog.html: The user interface (The Dashboard).
-START_APP.bat: The bootloader that initializes the environment.
-SyncScrap.bat: The core engine (Logic) that monitors files.
-SilentSync.vbs: A wrapper that runs the engine invisibly.
-STOP_SYNC.bat: The emergency stop and cleanup utility.
+File	Purpose
+ScrapLog.html	User-facing dashboard (UI)
+START_APP.bat	Bootloader and startup orchestrator
+SyncScrap.bat	Core synchronization engine
+SilentSync.vbs	Runs the engine invisibly (no console window)
+STOP_SYNC.bat	Emergency stop and cleanup utility
 
-System Architecture
-1. The Startup Pipeline (START_APP.bat)
-Initialization: Kills existing instances and deletes old heartbeat files to prevent "ghost" processes.
-Hidden Execution: Launches SilentSync.vbs, triggering the engine in a hidden window.
-Verification: Waits for heartbeat.js before opening the Dashboard to ensure zero-latency connectivity.
+System Architecture Overview
+The system is composed of three coordinated layers:
+1. Startup Pipeline
+2. Background Automation Engine
+3. Dashboard UI
 
-2. The Automation Engine (SyncScrap.bat)
-Runs a continuous loop (every 2 seconds):
-Heartbeat & Security: Writes the current Windows %USERNAME% to heartbeat.js.
-Data Sync: Detects SCRAP_EXPORT_DATA.txt in Downloads, moves it to the local database, and copies a backup to a configured Network Drive.
-Smart Archiving: Detects PDF exports and organizes them into: Scrap_History/[Year]/[Month]/[Week_Number].
+Each layer operates independently but communicates through a shared heartbeat protocol.
 
-4. The Dashboard UI (ScrapLog.html)
-Monitoring: Checks for the heartbeat every 2s. If missing, a "SYSTEM OFFLINE" lockout screen triggers.
-Permissions: Compares user ID against a WHITELIST. Unauthorized users have action buttons disabled.
+1. Startup Pipeline (START_APP.bat)
+The startup script ensures the system always launches in a clean and verified state.
+Startup Sequence
+Cleanup
+Terminates any existing sync processes
+Deletes stale heartbeat.js files to prevent “ghost” status
 
-Technical Logic (Pseudocode)
-Core Sync Engine
+Hidden Engine Launch
 
+Starts SilentSync.vbs
+
+Runs the sync engine invisibly in the background
+
+Engine Verification
+
+Waits until heartbeat.js is created
+
+Confirms the engine is alive before continuing
+
+UI Launch
+
+Opens ScrapLog.html only after verification completes
+
+This guarantees the dashboard never opens in an unsafe or partially initialized state.
+
+2. Automation Engine (SyncScrap.bat)
+
+The automation engine runs continuously in the background on a short interval.
+
+Core Responsibilities
+
+Heartbeat & Identity
+
+Writes system heartbeat data every 2 seconds
+
+Includes the current Windows %USERNAME% for permission checks
+
+Data Synchronization
+
+Detects SCRAP_EXPORT_DATA.txt in the user’s Downloads folder
+
+Moves it into the local data store
+
+Copies a backup to a configured network drive (if available)
+
+Smart PDF Archiving
+
+Detects exported PDF reports
+
+Automatically organizes them into:
+
+Scrap_History/
+ └── [Year]/
+     └── [Month]/
+         └── [Week_Number]/
+
+
+Date calculations are handled via PowerShell for accuracy.
+
+3. Dashboard UI (ScrapLog.html)
+
+The dashboard is a browser-based control and visibility layer.
+
+UI Behavior
+
+Heartbeat Monitoring
+
+Checks for heartbeat.js every 2 seconds
+
+If missing, displays a full-screen SYSTEM OFFLINE lockout
+
+Permission Enforcement
+
+Compares the active Windows user against a WHITELIST
+
+Unauthorized users:
+
+Cannot save
+
+Cannot modify records
+
+See disabled action controls
+
+This enforces a single-writer / multi-reader authority model.
+
+Core Logic (Pseudocode)
+Background Sync Engine
 INITIALIZE:
-    SET source_data    = Downloads/SCRAP_EXPORT_DATA.txt
-    SET backup_path    = [USER_DEFINED_NETWORK_PATH]
-    SET archive_folder = ./Scrap_History
+  source_data = Downloads/SCRAP_EXPORT_DATA.txt
+  backup_path = USER_DEFINED_NETWORK_PATH
+  archive_folder = ./Scrap_History
 
 LOOP (Every 2 Seconds):
-    WRITE "Active_Status and %USERNAME%" TO heartbeat.js
+  WRITE "Active_Status + USERNAME" TO heartbeat.js
 
-    IF source_data EXISTS:
-        MOVE source_data TO local_database
-        IF backup_path IS ACCESSIBLE:
-            COPY local_database TO backup_path
+  IF source_data EXISTS:
+      MOVE source_data TO local_database
+      IF backup_path IS ACCESSIBLE:
+          COPY local_database TO backup_path
 
-    IF Exported_PDF EXISTS:
-        CALCULATE [Year], [Month], [Week_Number] via PowerShell
-        CREATE target_directory IF NOT EXISTS
-        MOVE PDF TO target_directory
-Dashboard UI Logic
+  IF Exported_PDF EXISTS:
+      CALCULATE Year, Month, Week_Number
+      CREATE archive_folder IF NOT EXISTS
+      MOVE PDF TO archive_folder
 
+Dashboard Logic
 FUNCTION checkHeartbeat():
-    TRY to load 'heartbeat.js'
-    IF SUCCESS:
-        HIDE Lockout Overlay
-        VERIFY currentUser against WHITELIST
-    IF FAIL:
-        SHOW "SYSTEM OFFLINE" Overlay
-        DISABLE Action Buttons
-        
+  TRY load heartbeat.js
+    IF success:
+        HIDE lockout screen
+        VERIFY user against WHITELIST
+        IF unauthorized:
+            DISABLE action buttons
+    IF failure:
+        SHOW "SYSTEM OFFLINE" lockout screen
+
 Setup & Installation
-Clone this repository to a local directory.
-Open ScrapLog.html and add authorized Windows IDs to the WHITELIST array.
-Edit SyncScrap.bat and set the G_DRIVE_BACKUP variable to your network share path.
-Run START_APP.bat to launch the system.
+
+Clone this repository to a local folder
+
+Open ScrapLog.html
+
+Add authorized Windows usernames to the WHITELIST array
+
+Open SyncScrap.bat
+
+Set G_DRIVE_BACKUP to your network share path
+
+Run START_APP.bat
+
+The system will:
+
+launch silently
+
+verify engine health
+
+open the dashboard automatically
+
+Notes
+
+This system is intentionally minimal by design.
+Complexity was avoided where it did not improve reliability, safety, or usability.
