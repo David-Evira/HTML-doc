@@ -1,23 +1,36 @@
-@echo off
-cd /d "%~dp0"
+# PSEUDOCODE: START_SYSTEM
 
-:: 1. Kill any old sync tasks
-taskkill /FI "WINDOWTITLE eq SCRAP_SYNC_TASK*" /F >nul 2>&1
+PURPOSE:
+    To ensure a clean environment, launch the hidden synchronization 
+    engine, and only open the user interface once the engine is verified active.
 
-:: 2. Delete old heartbeat so we know we're starting fresh
-if exist "heartbeat.js" del /q "heartbeat.js"
+INITIALIZE:
+    Set working directory to script location
 
-:: 3. Launch the HIDDEN engine
-start "" wscript.exe "SilentSync.vbs"
+STEP 1: CLEAN ENVIRONMENT
+    FIND and KILL any existing "SCRAP_SYNC_TASK" processes
+    (Prevents duplicate engines from running simultaneously)
+    
+    IF heartbeat.js exists: 
+        DELETE heartbeat.js
+        (Ensures we don't detect a "false active" status from a previous session)
 
-:: 4. WAIT for the engine to create the first heartbeat file
-:wait_for_engine
-if not exist "heartbeat.js" (
-    timeout /t 1 /nobreak >nul
-    goto wait_for_engine
-)
+STEP 2: LAUNCH ENGINE
+    EXECUTE "SilentSync.vbs"
+    (This starts the main engine in the background without a visible window)
 
-:: 5. Now that the engine is confirmed alive, launch the Dashboard
-start "" "ScrapLog.html"
+STEP 3: ACTIVE VERIFICATION (Heartbeat Check)
+    LOOP:
+        CHECK if heartbeat.js has been created
+        IF NOT FOUND:
+            WAIT 1 second
+            RETRY CHECK
+        IF FOUND:
+            BREAK LOOP
+    (This ensures the Dashboard never opens in 'Offline Mode' during startup)
 
-exit
+STEP 4: LAUNCH INTERFACE
+    OPEN "ScrapLog.html" in the default web browser
+
+TERMINATE:
+    CLOSE Bootloader (Background engine remains running)
