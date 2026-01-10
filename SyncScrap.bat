@@ -1,52 +1,72 @@
-# PSEUDOCODE: SCRAP_SYNC_TASK
+@echo off
+title SCRAP_SYNC_TASK
+:: Set working directory to the current folder
+cd /d "%~dp0"
 
-INITIALIZE:
-    Set working directory to script location
-    IF heartbeat_file exists: DELETE heartbeat_file
+:: Initial cleanup of status files
+if exist "heartbeat.js" del /q "heartbeat.js"
+
+:: --- CONFIGURATION ---
+:: Define the paths for source files and destinations
+set "DL_DATA=%USERPROFILE%\Downloads\SCRAP_EXPORT_DATA.txt"
+set "DL_PDF_PATTERN=%USERPROFILE%\Downloads\ScrapLog_Export_*.pdf"
+set "DEST_DATA=%~dp0scrap_data.js"
+
+:: REPLACE THIS PATH with your actual network or local backup location
+set "BACKUP_DIR=C:\Backup_Destination"
+set "BASE_PDF_DIR=%~dp0Scrap_History"
+
+echo [STARTING] Background engine active...
+
+:loop
+:: --- 1. HEARTBEAT SYSTEM ---
+:: Periodically write status and current user to a JS file for the Dashboard UI
+echo var systemActive = true; var currentUser = "%USERNAME%"; > "heartbeat.js"
+
+:: --- 2. DATA SYNCHRONIZATION ---
+:: Check for new data exports in the Downloads folder
+if exist "%DL_DATA%" (
+    echo [FOUND NEW DATA] Processing and backing up...
     
-    DEFINE source_data_path      = Downloads/SCRAP_EXPORT_DATA.txt
-    DEFINE source_pdf_pattern    = Downloads/ScrapLog_Export_*.pdf
-    DEFINE local_database        = CurrentFolder/scrap_data.js
-    DEFINE backup_destination    = G:/Shared_Drive/Tools/scrap_data.js
-    DEFINE archive_base_folder   = CurrentFolder/Scrap_History
-
-LOOP (Continuous Execution):
+    :: Move to local database
+    move /y "%DL_DATA%" "%DEST_DATA%"
     
-    # --- HEARTBEAT SYSTEM ---
-    GET Current_Windows_Username
-    WRITE "System_Active = True, User = [Username]" TO heartbeat.js
-    (This allows the UI to verify the background engine is running and check permissions)
+    :: Security: Unblock the file to ensure the browser can read it as a script
+    powershell -Command "Unblock-File -Path '%DEST_DATA%'"
+    
+    :: External Backup
+    if exist "%BACKUP_DIR%" (
+        copy /y "%DEST_DATA%" "%BACKUP_DIR%\scrap_data.js" >nul
+        echo [SUCCESS] Network Backup Complete.
+    )
+    
+    :: Cleanup any temporary download naming variants
+    del /q "%USERPROFILE%\Downloads\SCRAP_EXPORT_DATA*.txt" >nul 2>&1
+)
 
-    # --- 1. DATA SYNCHRONIZATION ---
-    IF source_data_path EXISTS:
-        DISPLAY "New data found"
-        MOVE source_data_path TO local_database (Overwrite existing)
-        UNBLOCK local_database (Security bypass for browser access)
-        
-        IF backup_destination path IS ACCESSIBLE:
-            COPY local_database TO backup_destination
-            DISPLAY "External Backup Complete"
-            
-        DELETE any remaining SCRAP_EXPORT_DATA temporary files in Downloads
-        DISPLAY "Local Database Updated"
+:: --- 3. AUTOMATED PDF ARCHIVING ---
+:: Check for exported PDF reports
+if exist "%DL_PDF_PATTERN%" (
+    echo [FOUND PDF] Calculating date-based folder structure...
+    
+    :: Use PowerShell to calculate Year, Month Name, and Week Number (ISO Standard)
+    for /f "tokens=1-3" %%A in ('powershell -Command "Get-Date -uformat '%%Y %%B'; $c=(Get-Culture).Calendar; $d=Get-Date; $w=$c.GetWeekOfYear($d,[System.Globalization.CalendarWeekRule]::FirstFourDayWeek,[DayOfWeek]::Sunday); if($w -lt 10){'0'+$w}else{$w}"') do (
+        set "curYear=%%A"
+        set "curMonth=%%B"
+        set "curWeek=Week %%C"
+    )
+    
+    :: Build the nested directory path
+    set "TARGET_DIR=%BASE_PDF_DIR%\%curYear%\%curMonth%\%curWeek%"
+    
+    :: Create directory if it doesn't exist
+    if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
+    
+    :: Move PDF to the final archive
+    move /y "%DL_PDF_PATTERN%" "%TARGET_DIR%\"
+    echo [SUCCESS] PDF Archived to: %TARGET_DIR%
+)
 
-    # --- 2. PDF ARCHIVAL & DATE SORTING ---
-    IF source_pdf_pattern EXISTS:
-        DISPLAY "New PDF found"
-        
-        # Calculate Date-Based Folder Structure
-        GET Current_Year
-        GET Current_Month_Name
-        GET Current_Week_Of_Year (ISO-8601 Standard)
-        
-        SET target_path = archive_base_folder / Year / Month / Week
-        
-        IF target_path DOES NOT EXIST:
-            CREATE target_path
-            
-        MOVE source_pdf_pattern TO target_path
-        DISPLAY "PDF archived to: " + target_path
-
-    # --- WAIT PERIOD ---
-    PAUSE for 2 seconds
-    REPEAT LOOP
+:: Wait 2 seconds before the next check to preserve CPU resources
+timeout /t 2 >nul
+goto loop
