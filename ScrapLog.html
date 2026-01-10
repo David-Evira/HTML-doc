@@ -1,58 +1,314 @@
-# PSEUDOCODE: DASHBOARD_UI (ScrapLog.html)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Master Scrap Log | Dashboard</title>
+  
+  <script id="syncScript" src="scrap_data.js"></script>
 
-INITIALIZE:
-    LOAD external PDF generation libraries
-    IF localStorage has backup: LOAD data
-    IF scrap_data.js exists: LOAD data (Prioritize over local storage)
+  <style>
+    :root { 
+        --primary: #1a3a5a; 
+        --accent: #0078d4; 
+        --scale-border: #28a745; 
+        --danger: #dc3545; 
+        --bg-gray: #d1d1d1;
+    }
+
+    body { font-family: "Segoe UI", Tahoma, sans-serif; background: var(--bg-gray); padding: 10px; margin: 0; }
     
-    START Heartbeat Monitor (Every 2 seconds)
-    START Mutation Observer (Prevent users from deleting the lockout screen)
+    .form-container { 
+        width: 99%; 
+        margin: 10px auto; 
+        background: #fff; 
+        padding: 15px; 
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3); 
+        position: relative; 
+        box-sizing: border-box; 
+        border-radius: 8px;
+    }
 
-UI MECHANICS:
+    /* Layout Components */
+    .header { border-bottom: 3px solid var(--primary); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; padding-bottom: 5px;}
+    .top-inputs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
+    .input-group { border-bottom: 1px solid #ccc; padding: 5px; }
+    .input-group label { font-size: 10px; font-weight: bold; display: block; color: var(--primary); }
+    .input-group input { border: none; width: 100%; outline: none; font-size: 14px; font-weight: bold; }
+    
+    .filter-bar { background: #f9f9f9; padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; border-radius: 4px; }
+    .filter-bar label { font-size: 12px; font-weight: bold; color: var(--primary); }
+    .filter-bar input { padding: 5px; border: 1px solid #ccc; border-radius: 4px; width: 250px; }
 
-    # --- 1. THE HEARTBEAT & LOCKOUT ---
-    FUNCTION checkHeartbeat():
-        TRY to load 'heartbeat.js' with a random timestamp (prevent caching)
-        IF SUCCESS:
-            HIDE Lockout Screen
-            EXTRACT 'currentUser' variable from heartbeat.js
-            RUN checkPermissions(currentUser)
-        IF FAIL:
-            SHOW "SYSTEM OFFLINE" Overlay
-            DISABLE all inputs
+    .tables-flex { display: flex; gap: 10px; align-items: stretch; } 
+    .card { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 8px; box-sizing: border-box; display: flex; flex-direction: column; }
+    .card-primary { flex: 4; min-width: 0; } 
+    .card-scale { flex: 1.5; min-width: 0; border-top: 4px solid var(--scale-border); }
+    .card-title { font-size: 12px; font-weight: bold; color: var(--primary); margin-bottom: 8px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
 
-    # --- 2. PERMISSION SYSTEM ---
-    FUNCTION checkPermissions(user):
-        IF user is in WHITELIST:
-            ENABLE Save, Email, PDF, and Reset buttons
-        ELSE:
-            DISABLE Action Buttons
-            SHOW "Access Denied" tooltip on hover
+    /* Table Styling */
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th { background: var(--primary); color: white; font-size: 9px; padding: 8px 2px; text-transform: uppercase; }
+    .card-scale th { background: var(--scale-border); }
+    td { border: 1px solid #ccc; height: 32px; vertical-align: middle; }
+    td input, td select { width: 100%; height: 100%; border: none; text-align: center; font-size: 11px; outline: none; }
+    
+    /* Buttons & Interaction */
+    .btn { padding: 8px 15px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 11px; transition: 0.2s; }
+    .btn-add { background: var(--primary); color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; }
+    .btn-save { background: #28a745; color: white; }
+    .btn-email { background: var(--accent); color: white; }
+    .auto-dt { background-color: #f0f7ff; cursor: pointer; font-weight: bold; color: #005a9e; }
 
-    # --- 3. DATA MANAGEMENT ---
-    ON "Save" Click:
-        COMPILE Header info (Dept, Shift, Line) + Table Rows
-        CREATE a Text Blob formatted as Javascript
-        TRIGGER Download for "SCRAP_EXPORT_DATA.txt"
-        (This file is then intercepted by the Sync Batch script)
+    /* Lockout Screen */
+    #lockout-screen { 
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+        background: rgba(0,0,0,0.8); backdrop-filter: blur(8px); 
+        z-index: 9999; display: flex; justify-content: center; align-items: center; 
+        visibility: hidden; opacity: 0; transition: 0.4s; 
+    }
+    #lockout-screen.active { visibility: visible; opacity: 1; }
+    .lock-box { background: #fff; padding: 40px; border-radius: 12px; text-align: center; border-top: 8px solid var(--danger); }
+    
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    .warning-blink { animation: pulse 2s infinite; font-size: 50px; }
 
-    ON "Email" Click:
-        IF rows are selected: Process selected only
-        ELSE: Process all valid entries
-        FORMAT data into a plain-text report
-        COPY report to Clipboard
-        OPEN default Email client with report in body
+    #toast { 
+        visibility: hidden; min-width: 200px; background: #333; color: #fff; 
+        text-align: center; border-radius: 5px; padding: 10px; 
+        position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 100; 
+    }
+    #toast.show { visibility: visible; }
+  </style>
+</head>
+<body onload="loadSavedData()">
 
-    # --- 4. TABLE LOGIC ---
-    ON "Add Row":
-        APPEND empty entry to Master Data Array
-        RE-RENDER Table (Page 1)
-        
-    ON "Filter" Input:
-        SEARCH Tag #, Bin #, or Date columns for matching text
-        UPDATE visible indices and RE-RENDER Table
+<div id="lockout-screen">
+    <div class="lock-box">
+        <div class="warning-blink">⚠️</div>
+        <h1 style="color:var(--danger)">SYSTEM OFFLINE</h1>
+        <p>The background synchronization engine is not running.<br>Please launch <b>START_APP.bat</b> to continue.</p>
+    </div>
+</div>
 
-    # --- 5. SMART FEATURES ---
-    - Automatic Timestamp: Clicking a date cell fills the current time.
-    - Weight Warning: If "Act Lbs" > 30,000, highlight red with a warning icon.
-    - Anti-Tamper: If systemActive is toggled to false, force-refresh the page.
+<div class="form-container">
+  <div class="header">
+    <h1 style="color:var(--primary); margin:0; font-size: 20px;">MASTER SCRAP LOG</h1>
+    <div id="sync-info" style="font-size: 11px; color: #666;">Background Engine Status: <span id="sync-status">Scanning...</span></div>
+  </div>
+
+  <div class="top-inputs">
+    <div class="input-group"><label>DEPARTMENT</label><input type="text" id="dept" placeholder="e.g. Production"></div>
+    <div class="input-group"><label>SHIFT</label><input type="text" id="shift" placeholder="Shift Name/No."></div>
+    <div class="input-group"><label>LINE / MACHINE</label><input type="text" id="line" placeholder="Station ID"></div>
+  </div>
+
+  <div class="filter-bar">
+    <label>🔍 SEARCH LOG:</label>
+    <input type="text" id="dateFilter" placeholder="Search Tag #, Bin #, or Date..." oninput="handleFilter()">
+  </div>
+
+  <div class="tables-flex">
+      <div class="card card-primary">
+        <div class="card-title">
+            Changeover Log
+            <button class="btn-add" onclick="addNewEntry()">+ Add New Row</button>
+        </div>
+        <table id="logTable">
+          <thead>
+            <tr>
+              <th style="width: 50px;">Act</th>
+              <th style="width: 30px;"><input type="checkbox" onclick="toggleSelectAll(this)"></th>
+              <th>Tag #</th>
+              <th>Bin #</th>
+              <th>Pos</th>
+              <th>Est Lbs</th>
+              <th>Status</th>
+              <th>Next Bin</th>
+              <th>Date/Time</th>
+              <th>In</th>
+              <th>Comments</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="card card-scale">
+        <div class="card-title">Scaled Data</div>
+        <table id="scaleTable">
+          <thead>
+            <tr>
+              <th>Tkt #</th>
+              <th>Act Lbs</th>
+              <th>Type</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="scaleBody"></tbody>
+        </table>
+      </div>
+  </div>
+
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+    <div id="mem-status" style="font-size: 11px; color: #777;">
+        Disk Link: <span id="last-sync-time">Standby</span>
+    </div>
+    <div style="display:flex; gap: 8px;">
+        <button id="btn-reset" class="btn" style="background:#eee" onclick="clearAllData()">Reset</button>
+        <button id="btn-pdf" class="btn" style="background:var(--accent); color:white" onclick="generatePDF()">Export PDF</button> 
+        <button id="btn-save" class="btn btn-save" onclick="handlePhysicalSave()">Save to Disk</button>
+        <button id="btn-email" class="btn btn-email" onclick="transferData()">Email Report</button>
+    </div>
+  </div>
+
+  <div id="toast">✅ Action Successful</div>
+</div>
+
+<script>
+/**
+ * --- ADMIN CONFIGURATION ---
+ * Add authorized Windows Usernames (lowercase) to this array
+ */
+const WHITELIST = ["admin_user", "supervisor_name", "operator_id"];
+
+let masterData = []; 
+let currentPage = 1;
+const rowsPerPage = 50;
+let filteredIndices = [];
+
+// Load Required PDF Libraries
+(function loadPDFScripts() {
+    const scripts = [
+        "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js", 
+        "https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"
+    ];
+    scripts.forEach(src => {
+        const s = document.createElement('script'); s.src = src; s.async = false; document.head.appendChild(s);
+    });
+})();
+
+// Permission & Heartbeat Logic
+function checkPermissions() {
+    const user = (typeof currentUser !== 'undefined') ? currentUser.toLowerCase() : "guest";
+    const hasAccess = WHITELIST.includes(user);
+    const buttons = [document.getElementById('btn-reset'), document.getElementById('btn-pdf'), document.getElementById('btn-save'), document.getElementById('btn-email')];
+
+    buttons.forEach(btn => {
+        if (btn) {
+            btn.disabled = !hasAccess;
+            btn.style.opacity = hasAccess ? "1" : "0.3";
+            btn.style.cursor = hasAccess ? "pointer" : "not-allowed";
+            if (!hasAccess) btn.title = "Access Denied: You are not on the administrator whitelist.";
+        }
+    });
+}
+
+function checkHeartbeat() {
+    const oldHb = document.getElementById('heartbeatLoader');
+    if (oldHb) oldHb.remove();
+    const hb = document.createElement('script');
+    hb.id = 'heartbeatLoader'; 
+    hb.src = 'heartbeat.js?cache=' + Math.random(); 
+    
+    hb.onload = () => { 
+        if (window.systemActive) {
+            document.getElementById('lockout-screen').classList.remove('active');
+            document.getElementById('sync-status').innerText = "ONLINE";
+            checkPermissions();
+        }
+    };
+    hb.onerror = () => { 
+        document.getElementById('lockout-screen').classList.add('active'); 
+        document.getElementById('sync-status').innerText = "OFFLINE";
+        window.systemActive = false; 
+    };
+    document.head.appendChild(hb);
+}
+setInterval(checkHeartbeat, 2000);
+
+// Data Rendering
+function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    const sbody = document.getElementById('scaleBody');
+    tbody.innerHTML = ''; sbody.innerHTML = '';
+    
+    let displayList = document.getElementById('dateFilter').value ? filteredIndices : [...masterData.keys()];
+    displayList.reverse();
+
+    displayList.forEach(idx => {
+        const item = masterData[idx];
+        const row = `<tr>
+            <td><button style="color:red; cursor:pointer;" onclick="deleteEntry(${idx})">×</button></td>
+            <td><input type="checkbox" ${item.main[1] === 'on' ? 'checked' : ''} onchange="updateCell(${idx}, 'main', 1, this.checked ? 'on' : 'off')"></td>
+            <td><input type="text" value="${item.main[2] || ''}" oninput="updateCell(${idx}, 'main', 2, this.value)"></td>
+            <td><input type="text" value="${item.main[3] || ''}" oninput="updateCell(${idx}, 'main', 3, this.value)"></td>
+            <td><input type="text" value="${item.main[4] || ''}" oninput="updateCell(${idx}, 'main', 4, this.value)"></td>
+            <td><input type="text" value="${item.main[5] || ''}" oninput="updateCell(${idx}, 'main', 5, this.value)"></td>
+            <td><select onchange="updateCell(${idx}, 'main', 6, this.value)">
+                <option value="">--</option>
+                <option value="Full" ${item.main[6] === 'Full' ? 'selected' : ''}>Full</option>
+                <option value="Part" ${item.main[6] === 'Part' ? 'selected' : ''}>Part</option>
+            </select></td>
+            <td><input type="text" value="${item.main[7] || ''}" oninput="updateCell(${idx}, 'main', 7, this.value)"></td>
+            <td><input type="text" class="auto-dt" value="${item.main[8] || ''}" onclick="captureTime(${idx}, 8, this)"></td>
+            <td><input type="text" value="${item.main[9] || ''}" oninput="updateCell(${idx}, 'main', 9, this.value)"></td>
+            <td><input type="text" value="${item.main[10] || ''}" oninput="updateCell(${idx}, 'main', 10, this.value)"></td>
+        </tr>`;
+        tbody.innerHTML += row;
+
+        const scaleRow = `<tr>
+            <td><input type="text" value="${item.scale[0] || ''}" oninput="updateCell(${idx}, 'scale', 0, this.value)"></td>
+            <td><input type="text" value="${item.scale[1] || ''}" oninput="updateCell(${idx}, 'scale', 1, this.value)"></td>
+            <td><input type="text" value="${item.scale[2] || ''}" oninput="updateCell(${idx}, 'scale', 2, this.value)"></td>
+            <td><input type="text" value="${item.scale[3] || ''}" oninput="updateCell(${idx}, 'scale', 3, this.value)"></td>
+        </tr>`;
+        sbody.innerHTML += scaleRow;
+    });
+}
+
+function updateCell(idx, part, col, val) {
+    masterData[idx][part][col] = val;
+    localStorage.setItem('SYSTEM_BACKUP', JSON.stringify(masterData));
+}
+
+function captureTime(idx, col, el) {
+    if (!el.value) {
+        const now = new Date().toLocaleString();
+        el.value = now;
+        updateCell(idx, 'main', col, now);
+    }
+}
+
+function addNewEntry() {
+    masterData.push({ main: Array(11).fill(""), scale: Array(4).fill("") });
+    renderTable();
+}
+
+function handleFilter() {
+    const term = document.getElementById('dateFilter').value.toLowerCase();
+    filteredIndices = masterData.map((d, i) => 
+        (d.main[2].toLowerCase().includes(term) || d.main[3].toLowerCase().includes(term)) ? i : -1
+    ).filter(i => i !== -1);
+    renderTable();
+}
+
+function handlePhysicalSave() {
+    const data = { header: { dept: document.getElementById('dept').value, shift: document.getElementById('shift').value, line: document.getElementById('line').value }, rows: masterData };
+    const blob = new Blob(["var savedScrapData = " + JSON.stringify(data) + ";"], { type: 'text/javascript' });
+    const a = document.createElement('a'); a.download = 'SCRAP_EXPORT_DATA.txt'; a.href = URL.createObjectURL(blob); a.click();
+    showToast("💾 Sent to Downloads for Sync...");
+}
+
+function loadSavedData() {
+    const local = localStorage.getItem('SYSTEM_BACKUP');
+    if (typeof savedScrapData !== 'undefined') masterData = savedScrapData.rows;
+    else if (local) masterData = JSON.parse(local);
+    if (masterData.length === 0) addNewEntry();
+    renderTable();
+}
+
+function clearAllData() { if(confirm("Clear all logs?")) { localStorage.removeItem('SYSTEM_BACKUP'); window.location.reload(); } }
+function showToast(msg) { const t = document.getElementById("toast"); t.innerText = msg; t.className = "show"; setTimeout(() => t.className = "", 3000); }
+</script>
+</body>
+</html>
