@@ -1,20 +1,13 @@
-# PSEUDOCODE: SILENT_SYNC_WRAPPER (VBScript)
+' Master Scrap Sync - Background Execution Wrapper
+' This script launches the batch engine in a hidden state.
 
-PURPOSE: 
-    To execute the main Batch engine as a background process, 
-    preventing the Command Prompt window from appearing to the end-user.
+Set WshShell = CreateObject("WScript.Shell")
 
-INITIALIZE:
-    CREATE Windows Shell Object (WScript.Shell)
+' Parameters:
+' chr(34) is a double quote, used to handle potential spaces in file paths.
+' 0       tells Windows to run the window HIDDEN.
+' False   tells the script NOT to wait for the batch file to finish before closing itself.
 
-EXECUTE:
-    DEFINE target_command = "SyncScrap.bat"
-    
-    # Run the command with the following parameters:
-    # 0     -> Window Style: HIDDEN (Hidden from view)
-    # False -> Wait On Return: OFF (Do not wait for the script to finish)
-    
-    CALL WshShell.Run(target_command, 0, False)
+WshShell.Run chr(34) & "SyncScrap.bat" & chr(34), 0, False
 
-TERMINATE:
-    Close Wrapper (Leaving the Batch engine running in system memory)
+Set WshShell = Nothing
